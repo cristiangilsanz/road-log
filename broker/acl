@@ -1,0 +1,13 @@
+user server
+topic readwrite fleet/#
+
+user dashboard
+topic read fleet/#
+
+user device
+topic write fleet/hello
+topic read fleet/hello/+
+topic write fleet/presence/+
+topic write fleet/vehicles/+/telemetry
+topic write fleet/vehicles/+/events
+topic read fleet/vehicles/+/config

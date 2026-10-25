@@ -1,0 +1,74 @@
+x-app: &app
+  build: .
+  restart: unless-stopped
+  environment: &environment
+    MQTT_HOST: broker
+    MQTT_SERVER_PASSWORD: ${MQTT_SERVER_PASSWORD:-server-secret}
+    MQTT_DASHBOARD_PASSWORD: ${MQTT_DASHBOARD_PASSWORD:-dashboard-secret}
+    MQTT_DEVICE_PASSWORD: ${MQTT_DEVICE_PASSWORD:-device-secret}
+    DATABASE_URL: postgresql+psycopg://roadlog:${DATABASE_PASSWORD:-database-secret}@database/roadlog
+    DEVICES_URL: http://devices:8001
+    SESSIONS_URL: http://sessions:8002
+    TELEMETRY_URL: http://telemetry:8003
+    EVENTS_URL: http://events:8004
+    ROUTER_URL: http://router:8005
+    SIM_SPEED: ${SIM_SPEED:-60}
+
+services:
+  broker:
+    build: ./broker
+    restart: unless-stopped
+    environment:
+      MQTT_SERVER_PASSWORD: ${MQTT_SERVER_PASSWORD:-server-secret}
+      MQTT_DASHBOARD_PASSWORD: ${MQTT_DASHBOARD_PASSWORD:-dashboard-secret}
+      MQTT_DEVICE_PASSWORD: ${MQTT_DEVICE_PASSWORD:-device-secret}
+
+  database:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: roadlog
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-database-secret}
+      POSTGRES_DB: roadlog
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U roadlog"]
+      interval: 2s
+      retries: 30
+
+  devices:
+    <<: *app
+    command: ["service", "devices"]
+    depends_on: { database: { condition: service_healthy } }
+
+  sessions:
+    <<: *app
+    command: ["service", "sessions"]
+    depends_on: { database: { condition: service_healthy } }
+
+  telemetry:
+    <<: *app
+    command: ["service", "telemetry"]
+    depends_on: { database: { condition: service_healthy } }
+
+  events:
+    <<: *app
+    command: ["service", "events"]
+    depends_on: { database: { condition: service_healthy } }
+
+  router:
+    <<: *app
+    command: ["router"]
+    depends_on: [broker, devices, sessions, telemetry, events]
+
+  dashboard:
+    <<: *app
+    command: ["dashboard"]
+    ports: ["${DASHBOARD_PORT:-8088}:8080"]
+    depends_on: [broker, router]
+
+  truck:
+    <<: *app
+    command: ["device"]
+    depends_on: [broker, router]
+    deploy:
+      replicas: ${TRUCKS:-6}
